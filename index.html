@@ -1,0 +1,846 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Streaming Quality Monitor</title>
+<style>
+  :root {
+    --bg: #eef2f6;
+    --surface: #ffffff;
+    --ink: #17212b;
+    --muted: #5b6875;
+    --line: #d3dbe3;
+    --signal: #1f6fb2;
+    --signal-ink: #ffffff;
+    --alert: #c0392b;
+    color-scheme: light;
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #10161c;
+      --surface: #18212a;
+      --ink: #e4eaf0;
+      --muted: #93a1ae;
+      --line: #2a3642;
+      --signal: #4b9be0;
+      --signal-ink: #0b1218;
+      --alert: #e8675a;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #10161c;
+    --surface: #18212a;
+    --ink: #e4eaf0;
+    --muted: #93a1ae;
+    --line: #2a3642;
+    --signal: #4b9be0;
+    --signal-ink: #0b1218;
+    --alert: #e8675a;
+    color-scheme: dark;
+  }
+  *, *::before, *::after { box-sizing: inherit; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 1rem;
+    line-height: 1.5;
+  }
+  main {
+    max-width: 40rem;
+    margin: 0 auto;
+    padding: 2.5rem 1.25rem 3rem;
+  }
+  header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-bottom: 1.25rem;
+    border-bottom: 2px solid var(--line);
+  }
+  h1 {
+    margin: 0;
+    font-size: 1.75rem;
+    line-height: 1.2;
+    font-weight: 650;
+  }
+  button {
+    font: inherit;
+    font-weight: 600;
+    border-radius: 6px;
+    padding: 0.65rem 1.1rem;
+    cursor: pointer;
+  }
+  button:focus-visible {
+    outline: 3px solid var(--signal);
+    outline-offset: 3px;
+  }
+  .primary {
+    color: var(--signal-ink);
+    background: var(--signal);
+    border: 0;
+  }
+  .primary:hover { filter: brightness(1.08); }
+  .secondary {
+    color: var(--ink);
+    background: transparent;
+    border: 1px solid var(--line);
+    padding: 0.5rem 0.9rem;
+    font-size: 0.95rem;
+  }
+  .secondary:hover { border-color: var(--signal); }
+  .file-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.6rem;
+    margin-top: 1.25rem;
+  }
+  .status {
+    color: var(--muted);
+    font-size: 0.9rem;
+    margin: 0;
+  }
+  .count {
+    margin: 1.25rem 0 0.5rem;
+    color: var(--muted);
+    font-size: 0.95rem;
+  }
+  ol {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  ol:empty { display: none; }
+  li {
+    display: flex;
+    align-items: baseline;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    padding: 0.75rem 1rem;
+    border-top: 1px solid var(--line);
+    font-variant-numeric: tabular-nums;
+  }
+  li:first-child { border-top: 0; }
+  li::before {
+    content: "";
+    flex: none;
+    width: 0.55rem;
+    height: 0.55rem;
+    border-radius: 50%;
+    background: var(--alert);
+    transform: translateY(-0.05rem);
+  }
+  .time { font-weight: 600; }
+  .date { color: var(--muted); }
+  .empty {
+    padding: 1.5rem 1rem;
+    color: var(--muted);
+    background: var(--surface);
+    border: 1px dashed var(--line);
+    border-radius: 8px;
+  }
+  .ping { margin-top: 1.5rem; }
+  .ping-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+  .ping h2 {
+    margin: 0;
+    font-size: 1.15rem;
+  }
+  .ping-latest {
+    margin: 0;
+    font-size: 1.15rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .ping-meta {
+    margin: 0.15rem 0 0.5rem;
+    color: var(--muted);
+    font-size: 0.9rem;
+  }
+  .ping-log {
+    max-height: 14rem;
+    overflow-y: auto;
+  }
+  .ping-log li::before { background: var(--signal); }
+  .ping-log li.failed::before { background: var(--alert); }
+  .ping-value {
+    margin-left: auto;
+    font-weight: 600;
+  }
+  .chart {
+    margin: 1.25rem 0 0;
+    padding: 1rem 1rem 0.75rem;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+  }
+  .chart svg {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+  .chart text {
+    fill: var(--muted);
+    font-size: 12px;
+    font-family: inherit;
+    font-variant-numeric: tabular-nums;
+  }
+  .chart .grid { stroke: var(--line); stroke-width: 1; }
+  .chart .series { fill: none; stroke: var(--signal); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+  .chart .dot { fill: var(--signal); }
+  .chart .fail { fill: var(--alert); }
+  .add-group {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  select {
+    font: inherit;
+    color: var(--ink);
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 0.6rem 0.7rem;
+  }
+  select:focus-visible {
+    outline: 3px solid var(--signal);
+    outline-offset: 3px;
+  }
+  .type-btn {
+    color: var(--signal);
+    background: var(--surface);
+    border: 2px solid var(--signal);
+    padding: 0.55rem 1rem;
+  }
+  .type-btn:hover { background: var(--bg); }
+  .type-btn:active { transform: translateY(1px); }
+  .incident-type {
+    padding: 0.05rem 0.55rem;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    color: var(--muted);
+    font-size: 0.8rem;
+  }
+  .ping-when {
+    margin-left: 0.35rem;
+    color: var(--muted);
+    font-weight: 400;
+    font-size: 0.85rem;
+  }
+  .chart .axis-title { fill: var(--ink); font-weight: 600; }
+  .chart .tick-time { fill: var(--ink); font-weight: 600; }
+  .chart .tick-date { fill: var(--muted); font-size: 11px; }
+  .chart figcaption {
+    margin-top: 0.4rem;
+    color: var(--muted);
+    font-size: 0.9rem;
+  }
+  .chart-empty {
+    margin: 0;
+    padding: 2rem 0;
+    text-align: center;
+    color: var(--muted);
+  }
+  .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Streaming Quality Monitor</h1>
+    <div class="add-group" role="group" aria-label="Log an incident">
+      <button type="button" class="type-btn" data-type="Digital Match">Digital Match</button>
+      <button type="button" class="type-btn" data-type="Remote Desktop">Remote Desktop</button>
+      <button type="button" class="primary" id="add">Add incident</button>
+    </div>
+  </header>
+
+  <div class="file-bar">
+    <button type="button" class="secondary" id="save">Save JSON</button>
+    <button type="button" class="secondary" id="load">Load JSON</button>
+    <input type="file" id="file" accept=".json,application/json" class="visually-hidden" tabindex="-1">
+    <p class="status" id="status" aria-live="polite"></p>
+  </div>
+
+  <section class="ping" aria-labelledby="ping-title">
+    <div class="ping-head">
+      <h2 id="ping-title">Ping</h2>
+      <p class="ping-latest" id="ping-latest" aria-live="polite">Running first test...</p>
+    </div>
+    <p class="ping-meta" id="ping-meta"></p>
+    <ol class="ping-log" id="ping-log"></ol>
+
+    <figure class="chart">
+      <div id="ping-chart"></div>
+      <figcaption id="ping-chart-caption">Ping latency over time</figcaption>
+    </figure>
+  </section>
+
+  <figure class="chart">
+    <div id="chart"></div>
+    <figcaption id="chart-caption">Incidents over time</figcaption>
+  </figure>
+
+  <p class="count" id="count">No incidents yet</p>
+  <p class="empty" id="empty">Press Add incident to record the time a problem happens.</p>
+  <ol id="list"></ol>
+</main>
+
+<script>
+  (function () {
+    // Incidents are stored as ISO 8601 UTC strings and shown in local time.
+    var STORAGE_KEY = "sqm-incidents";
+    var FILE_NAME = "incidents.json";
+
+    var list = document.getElementById("list");
+    var count = document.getElementById("count");
+    var empty = document.getElementById("empty");
+    var status = document.getElementById("status");
+    var fileInput = document.getElementById("file");
+
+    var incidents = [];
+
+    function pad(n) { return String(n).padStart(2, "0"); }
+
+    function setStatus(msg) { status.textContent = msg; }
+
+    // Keep valid, unique entries, newest first.
+    function normalize(arr) {
+      var seen = {};
+      var out = [];
+      arr.forEach(function (item) {
+        var t = item && typeof item.time === "string" ? item.time : null;
+        if (!t || isNaN(Date.parse(t)) || seen[t]) return;
+        seen[t] = true;
+        var entry = { time: t };
+        if (typeof item.type === "string" && item.type) entry.type = item.type.slice(0, 50);
+        // Optional ping snapshot taken when the incident was logged.
+        var p = item.ping;
+        if (p && typeof p.time === "string" && !isNaN(Date.parse(p.time)) &&
+            (p.ms === null || typeof p.ms === "number")) {
+          entry.ping = { time: p.time, ms: p.ms };
+          if (p.ms === null && typeof p.reason === "string") entry.ping.reason = p.reason;
+        }
+        out.push(entry);
+      });
+      out.sort(function (a, b) { return Date.parse(b.time) - Date.parse(a.time); });
+      return out;
+    }
+
+    // Accepts {"incidents": [...]} or a bare array.
+    function parseFile(text) {
+      var data = JSON.parse(text);
+      var arr = Array.isArray(data) ? data : (data && Array.isArray(data.incidents) ? data.incidents : null);
+      if (!arr) throw new Error("No incidents array found");
+      return normalize(arr);
+    }
+
+    function toJson() {
+      var pings = (pingData || []).map(function (p) {
+        var o = { time: new Date(p.t).toISOString(), ms: p.ms };
+        if (p.ms === null && p.reason) o.reason = p.reason;
+        return o;
+      });
+      return JSON.stringify({ version: 1, incidents: incidents, pings: pings }, null, 2) + "\n";
+    }
+
+    // Ping results from a saved file or storage entry; missing "pings" gives an empty list.
+    function parsePings(text) {
+      var data = JSON.parse(text);
+      var arr = data && Array.isArray(data.pings) ? data.pings : [];
+      var out = [];
+      arr.forEach(function (p) {
+        var t = p && typeof p.time === "string" ? Date.parse(p.time) : NaN;
+        if (isNaN(t) || !(p.ms === null || typeof p.ms === "number")) return;
+        out.push({ t: t, ms: p.ms, reason: p.ms === null && typeof p.reason === "string" ? p.reason : undefined });
+      });
+      return out;
+    }
+
+    function persist() {
+      try { localStorage.setItem(STORAGE_KEY, toJson()); } catch (e) { /* storage unavailable */ }
+    }
+
+    function render() {
+      list.textContent = "";
+      incidents.forEach(function (item) {
+        var d = new Date(item.time);
+        var li = document.createElement("li");
+        var t = document.createElement("span");
+        t.className = "time";
+        t.textContent = pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds());
+        var ds = document.createElement("span");
+        ds.className = "date";
+        ds.textContent = d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+        li.appendChild(t);
+        li.appendChild(ds);
+
+        if (item.type) {
+          var tag = document.createElement("span");
+          tag.className = "incident-type";
+          tag.textContent = item.type;
+          li.appendChild(tag);
+        }
+
+        var pv = document.createElement("span");
+        pv.className = "ping-value";
+        if (!item.ping) {
+          pv.textContent = "no ping recorded";
+        } else {
+          var pd = new Date(item.ping.time);
+          pv.textContent = item.ping.ms === null ? "ping failed" : item.ping.ms + " ms";
+          var when = document.createElement("span");
+          when.className = "ping-when";
+          when.textContent = "(ping at " + fmtHMS(pd) + ")";
+          pv.appendChild(when);
+          pv.title = "Ping measured " + fmtDate(pd) + " " + fmtHMS(pd) +
+            (item.ping.ms === null && item.ping.reason ? ", " + item.ping.reason : "");
+        }
+        li.appendChild(pv);
+        list.appendChild(li);
+      });
+      var n = incidents.length;
+      count.textContent = n === 0 ? "No incidents yet" : (n === 1 ? "1 incident" : n + " incidents");
+      empty.hidden = n > 0;
+      renderChart();
+    }
+
+    // --- Chart ---
+    // Cumulative incident count against the real date and time (local time).
+    // The time scale is shared so later series (speed, ping) can use the same x-axis.
+    var chartBox = document.getElementById("chart");
+    var chartCaption = document.getElementById("chart-caption");
+    var SVG_NS = "http://www.w3.org/2000/svg";
+    var MIN = 60000, HOUR = 3600000, DAY = 86400000;
+    var TICK_STEPS = [MIN, 2 * MIN, 5 * MIN, 10 * MIN, 15 * MIN, 30 * MIN,
+      HOUR, 2 * HOUR, 3 * HOUR, 6 * HOUR, 12 * HOUR,
+      DAY, 2 * DAY, 7 * DAY, 14 * DAY, 30 * DAY, 91 * DAY, 182 * DAY, 365 * DAY];
+
+    function fmtDate(d) { return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); }
+    function fmtHM(d) { return pad(d.getHours()) + ":" + pad(d.getMinutes()); }
+    function fmtHMS(d) { return fmtHM(d) + ":" + pad(d.getSeconds()); }
+
+    // Evenly spaced ticks aligned to local clock and calendar boundaries.
+    function timeTicks(t0, t1, maxTicks) {
+      var span = t1 - t0;
+      var step = TICK_STEPS[TICK_STEPS.length - 1];
+      for (var i = 0; i < TICK_STEPS.length; i++) {
+        if (span / TICK_STEPS[i] <= maxTicks) { step = TICK_STEPS[i]; break; }
+      }
+      var ticks = [];
+      if (step < DAY) {
+        var off = -new Date(t0).getTimezoneOffset() * MIN;
+        for (var t = Math.ceil((t0 + off) / step) * step - off; t <= t1; t += step) ticks.push(t);
+      } else {
+        var days = Math.round(step / DAY);
+        var d = new Date(t0);
+        d.setHours(0, 0, 0, 0);
+        if (d.getTime() < t0) d.setDate(d.getDate() + 1);
+        while (d.getTime() <= t1) {
+          ticks.push(d.getTime());
+          d.setDate(d.getDate() + days);
+        }
+      }
+      return { step: step, ticks: ticks };
+    }
+
+    function el(name, attrs, text) {
+      var node = document.createElementNS(SVG_NS, name);
+      Object.keys(attrs).forEach(function (k) { node.setAttribute(k, attrs[k]); });
+      if (text !== undefined) node.textContent = text;
+      return node;
+    }
+
+    function renderChart() {
+      chartBox.textContent = "";
+      if (!incidents.length) {
+        var p = document.createElement("p");
+        p.className = "chart-empty";
+        p.textContent = "The chart appears after the first incident.";
+        chartBox.appendChild(p);
+        chartCaption.textContent = "Cumulative incidents over time";
+        return;
+      }
+
+      var times = incidents.map(function (i) { return Date.parse(i.time); }).sort(function (a, b) { return a - b; });
+      var first = times[0];
+      var total = times.length;
+
+      // Time domain: first incident to now, at least 2 minutes wide, with a small left margin.
+      var t1 = Math.max(Date.now(), times[total - 1]);
+      var t0 = Math.min(first, t1 - 2 * MIN);
+      t0 -= (t1 - t0) * 0.03;
+
+      var W = 600, H = 260, L = 40, R = 42, T = 12, B = 46;
+      var yStep = Math.max(1, Math.ceil(total / 4));
+      var top = yStep * Math.ceil(total / yStep);
+      function x(t) { return L + (W - L - R) * (t - t0) / (t1 - t0); }
+      function y(v) { return T + (H - T - B) * (1 - v / top); }
+
+      var svg = el("svg", {
+        viewBox: "0 0 " + W + " " + H,
+        role: "img",
+        "aria-label": "Cumulative incidents over time: " + total + " since " + fmtDate(new Date(first)) + " " + fmtHM(new Date(first))
+      });
+
+      for (var v = 0; v <= top; v += yStep) {
+        svg.appendChild(el("line", { class: "grid", x1: L, x2: W - R, y1: y(v), y2: y(v) }));
+        svg.appendChild(el("text", { x: L - 8, y: y(v) + 4, "text-anchor": "end" }, String(v)));
+      }
+
+      var tt = timeTicks(t0, t1, 5);
+      tt.ticks.forEach(function (t) {
+        svg.appendChild(el("line", { class: "grid", x1: x(t), x2: x(t), y1: T, y2: H - B, "stroke-dasharray": "2 4" }));
+        // Two-line tick label: time (HH:MM) above, full date (YYYY-MM-DD) below.
+        var dt = new Date(t);
+        var label = el("text", { x: x(t), y: H - B + 18, "text-anchor": "middle" });
+        label.appendChild(el("tspan", { class: "tick-time", x: x(t) }, fmtHM(dt)));
+        label.appendChild(el("tspan", { class: "tick-date", x: x(t), dy: "16" }, fmtDate(dt)));
+        svg.appendChild(label);
+      });
+
+      // Step line: flat between incidents, rising by one at each incident.
+      var d = "M" + x(t0).toFixed(1) + "," + y(0).toFixed(1);
+      times.forEach(function (t, i) {
+        d += " H" + x(t).toFixed(1) + " V" + y(i + 1).toFixed(1);
+      });
+      d += " H" + x(t1).toFixed(1);
+      svg.appendChild(el("path", { class: "series", d: d }));
+
+      if (total <= 200) {
+        times.forEach(function (t, i) {
+          var c = el("circle", { class: "dot", cx: x(t), cy: y(i + 1), r: 3 });
+          var dt = new Date(t);
+          c.appendChild(el("title", {}, "#" + (i + 1) + ": " + fmtDate(dt) + " " + fmtHMS(dt)));
+          svg.appendChild(c);
+        });
+      }
+
+      chartBox.appendChild(svg);
+      var fd = new Date(first);
+      var nd = new Date(t1);
+      chartCaption.textContent = "Cumulative incidents from " + fmtDate(fd) + " " + fmtHMS(fd) +
+        " to " + fmtDate(nd) + " " + fmtHMS(nd) + " (local time)";
+    }
+
+    // --- Add ---
+    // Type buttons log a typed incident; Add incident logs one without a type.
+    function logIncident(type) {
+      var entry = { time: new Date().toISOString() };
+      if (type) entry.type = type;
+      // Attach the most recent ping result, if any.
+      var lastPing = pingData.length ? pingData[pingData.length - 1] : null;
+      if (lastPing) {
+        entry.ping = { time: new Date(lastPing.t).toISOString(), ms: lastPing.ms, reason: lastPing.reason };
+      }
+      incidents = normalize([entry].concat(incidents));
+      persist();
+      render();
+    }
+
+    document.getElementById("add").addEventListener("click", function () { logIncident(null); });
+    Array.prototype.forEach.call(document.querySelectorAll(".type-btn"), function (btn) {
+      btn.addEventListener("click", function () { logIncident(btn.getAttribute("data-type")); });
+    });
+
+    // --- Save ---
+    function browserDownload(text) {
+      var blob = new Blob([text], { type: "application/json" });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement("a");
+      a.href = url;
+      a.download = FILE_NAME;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    }
+
+    var downloadsReady = Promise.resolve(null);
+    if (window.claude && typeof window.claude.use === "function") {
+      downloadsReady = window.claude.use("downloads").catch(function () { return null; });
+    }
+
+    document.getElementById("save").addEventListener("click", function () {
+      var text = toJson();
+      if (!(window.claude && typeof window.claude.use === "function")) {
+        // Running as a local file or on your own server.
+        browserDownload(text);
+        setStatus("Saved " + FILE_NAME);
+        return;
+      }
+      downloadsReady.then(function (downloads) {
+        if (!downloads) {
+          setStatus("Saving files is not available in this view.");
+          return;
+        }
+        downloads.save({ filename: FILE_NAME, data: text }).then(function () {
+          setStatus("Saved " + FILE_NAME);
+        }).catch(function (err) {
+          var code = err && err.code;
+          if (code === "declined") setStatus("Save canceled.");
+          else if (code === "rate_limited") setStatus("A save prompt is already open. Try again in a moment.");
+          else setStatus("Saving files is not available in this view.");
+        });
+      });
+    });
+
+    // --- Load ---
+    document.getElementById("load").addEventListener("click", function () {
+      fileInput.value = "";
+      fileInput.click();
+    });
+
+    fileInput.addEventListener("change", function () {
+      var f = fileInput.files && fileInput.files[0];
+      if (!f) return;
+      f.text().then(function (text) {
+        var added = merge(parseFile(text));
+        var addedPings = mergePings(parsePings(text));
+        persist();
+        render();
+        setStatus("Loaded " + f.name + ": " + added + " new incident" + (added === 1 ? "" : "s") +
+          ", " + addedPings + " new ping result" + (addedPings === 1 ? "" : "s") + ".");
+      }).catch(function () {
+        setStatus(f.name + " is not a valid incidents file.");
+      });
+    });
+
+    // --- Ping ---
+    // Browsers cannot send ICMP pings, so this times a small HTTP request instead.
+    // Served from a web server: HEAD request to the page's own address.
+    // Opened as a local file: request to a tiny public endpoint.
+    var PING_INTERVAL = 30000, PING_TIMEOUT = 10000, PING_MAX = 200;
+    var pingLog = document.getElementById("ping-log");
+    var pingLatest = document.getElementById("ping-latest");
+    var pingMeta = document.getElementById("ping-meta");
+    var pingSameOrigin = /^https?:$/.test(location.protocol);
+    var pingTarget = pingSameOrigin ? location.origin + location.pathname : "https://www.google.com/generate_204";
+    pingMeta.textContent = "HTTP round trip to " + new URL(pingTarget).host + ", every 30 s";
+
+    // One row in the ping log, newest on top.
+    function pingRow(p) {
+      var started = new Date(p.t);
+      var li = document.createElement("li");
+      if (p.ms === null) li.className = "failed";
+      var t = document.createElement("span");
+      t.className = "time";
+      t.textContent = fmtHMS(started);
+      var ds = document.createElement("span");
+      ds.className = "date";
+      ds.textContent = fmtDate(started);
+      var val = document.createElement("span");
+      val.className = "ping-value";
+      val.textContent = p.ms === null ? "failed (" + (p.reason || "unknown") + ")" : p.ms + " ms";
+      li.appendChild(t);
+      li.appendChild(ds);
+      li.appendChild(val);
+      pingLog.insertBefore(li, pingLog.firstChild);
+      while (pingLog.children.length > PING_MAX) pingLog.removeChild(pingLog.lastChild);
+    }
+
+    function addPing(started, ms, reason) {
+      var p = { t: started.getTime(), ms: ms, reason: reason };
+      pingRow(p);
+      pingLatest.textContent = ms === null ? "Failed at " + fmtHMS(started) : ms + " ms at " + fmtHMS(started);
+
+      pingData.push(p);
+      if (pingData.length > PING_MAX) pingData.shift();
+      persist();
+      renderPingChart();
+    }
+
+    // Merge restored or imported results, keep the newest PING_MAX, then redraw log and chart.
+    function mergePings(extra) {
+      var seen = {};
+      var all = pingData.concat(extra).filter(function (p) {
+        if (seen[p.t]) return false;
+        seen[p.t] = true;
+        return true;
+      });
+      all.sort(function (a, b) { return a.t - b.t; });
+      var added = all.length - pingData.length;
+      pingData = all.slice(-PING_MAX);
+      pingLog.textContent = "";
+      pingData.forEach(pingRow);
+      renderPingChart();
+      return Math.max(0, added);
+    }
+
+    function runPing() {
+      var started = new Date();
+      var ctrl = new AbortController();
+      var timer = setTimeout(function () { ctrl.abort(); }, PING_TIMEOUT);
+      var url = pingTarget + (pingTarget.indexOf("?") < 0 ? "?" : "&") + "ping=" + Date.now();
+      var t0 = performance.now();
+      fetch(url, {
+        method: pingSameOrigin ? "HEAD" : "GET",
+        mode: pingSameOrigin ? "same-origin" : "no-cors",
+        cache: "no-store",
+        signal: ctrl.signal
+      }).then(function () {
+        addPing(started, Math.round(performance.now() - t0));
+      }).catch(function (e) {
+        addPing(started, null, e && e.name === "AbortError" ? "timeout" : "no connection");
+      }).then(function () { clearTimeout(timer); });
+    }
+
+    // --- Ping chart ---
+    // Latency (ms) against the actual time of each test. Failed tests break the line
+    // and show as red markers on the zero line.
+    var pingData = [];
+    var pingChartBox = document.getElementById("ping-chart");
+    var pingChartCaption = document.getElementById("ping-chart-caption");
+
+    function niceStep(maxV, maxTicks) {
+      var raw = maxV / maxTicks;
+      var mag = Math.pow(10, Math.floor(Math.log10(raw)));
+      var steps = [1, 2, 5, 10];
+      for (var i = 0; i < steps.length; i++) {
+        if (steps[i] * mag >= raw) return steps[i] * mag;
+      }
+      return 10 * mag;
+    }
+
+    function renderPingChart() {
+      pingChartBox.textContent = "";
+      if (!pingData.length) {
+        var p = document.createElement("p");
+        p.className = "chart-empty";
+        p.textContent = "The chart appears after the first ping result.";
+        pingChartBox.appendChild(p);
+        pingChartCaption.textContent = "Ping latency over time";
+        return;
+      }
+
+      var first = pingData[0].t;
+      var last = pingData[pingData.length - 1].t;
+      var t1 = Math.max(Date.now(), last);
+      var t0 = Math.min(first, t1 - 2 * MIN);
+      t0 -= (t1 - t0) * 0.03;
+
+      var okVals = pingData.filter(function (p) { return p.ms !== null; }).map(function (p) { return p.ms; });
+      var maxMs = Math.max(10, okVals.length ? Math.max.apply(null, okVals) : 0);
+      var yStep = niceStep(maxMs, 4);
+      var top = yStep * Math.ceil(maxMs / yStep);
+
+      var W = 600, H = 280, L = 64, R = 42, T = 12, B = 64;
+      function x(t) { return L + (W - L - R) * (t - t0) / (t1 - t0); }
+      function y(v) { return T + (H - T - B) * (1 - v / top); }
+
+      var svg = el("svg", {
+        viewBox: "0 0 " + W + " " + H,
+        role: "img",
+        "aria-label": "Ping latency over time: " + pingData.length + " tests, " + okVals.length + " succeeded"
+      });
+
+      for (var v = 0; v <= top; v += yStep) {
+        svg.appendChild(el("line", { class: "grid", x1: L, x2: W - R, y1: y(v), y2: y(v) }));
+        svg.appendChild(el("text", { x: L - 8, y: y(v) + 4, "text-anchor": "end" }, String(v)));
+      }
+
+      var tt = timeTicks(t0, t1, 5);
+      tt.ticks.forEach(function (t) {
+        svg.appendChild(el("line", { class: "grid", x1: x(t), x2: x(t), y1: T, y2: H - B, "stroke-dasharray": "2 4" }));
+        var dt = new Date(t);
+        var label = el("text", { x: x(t), y: H - B + 18, "text-anchor": "middle" });
+        label.appendChild(el("tspan", { class: "tick-time", x: x(t) }, fmtHM(dt)));
+        label.appendChild(el("tspan", { class: "tick-date", x: x(t), dy: "16" }, fmtDate(dt)));
+        svg.appendChild(label);
+      });
+
+      // Axis titles.
+      var midX = L + (W - L - R) / 2;
+      var midY = T + (H - T - B) / 2;
+      svg.appendChild(el("text", { class: "axis-title", x: midX, y: H - 6, "text-anchor": "middle" },
+        "Time (local, HH:MM / YYYY-MM-DD)"));
+      svg.appendChild(el("text", { class: "axis-title", x: 16, y: midY, "text-anchor": "middle",
+        transform: "rotate(-90 16 " + midY + ")" }, "Ping (ms)"));
+
+      var d = "";
+      var penUp = true;
+      pingData.forEach(function (p) {
+        if (p.ms === null) { penUp = true; return; }
+        d += (penUp ? " M" : " L") + x(p.t).toFixed(1) + "," + y(p.ms).toFixed(1);
+        penUp = false;
+      });
+      if (d) svg.appendChild(el("path", { class: "series", d: d.trim() }));
+
+      pingData.forEach(function (p) {
+        var dt = new Date(p.t);
+        var stamp = fmtDate(dt) + " " + fmtHMS(dt);
+        var c;
+        if (p.ms === null) {
+          c = el("circle", { class: "fail", cx: x(p.t), cy: y(0), r: 4 });
+          c.appendChild(el("title", {}, stamp + ": failed (" + p.reason + ")"));
+        } else {
+          c = el("circle", { class: "dot", cx: x(p.t), cy: y(p.ms), r: 3 });
+          c.appendChild(el("title", {}, stamp + ": " + p.ms + " ms"));
+        }
+        svg.appendChild(c);
+      });
+
+      pingChartBox.appendChild(svg);
+      var fd = new Date(first), nd = new Date(t1);
+      pingChartCaption.textContent = "Ping latency (ms) from " + fmtDate(fd) + " " + fmtHMS(fd) +
+        " to " + fmtDate(nd) + " " + fmtHMS(nd) + " (local time)";
+    }
+
+    renderPingChart();
+    runPing();
+    setInterval(runPing, PING_INTERVAL);
+
+    // --- Page load ---
+    // 1. Restore what this browser saved last time.
+    try {
+      var stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        incidents = parseFile(stored);
+        mergePings(parsePings(stored));
+      }
+    } catch (e) { incidents = []; }
+    render();
+
+    // 2. If the page is served from a web server next to incidents.json, merge that file in.
+    if (/^https?:$/.test(location.protocol) && !window.claude) {
+      fetch(FILE_NAME, { cache: "no-store" }).then(function (res) {
+        if (!res.ok) throw new Error("not found");
+        return res.text();
+      }).then(function (text) {
+        var added = merge(parseFile(text));
+        mergePings(parsePings(text));
+        persist();
+        render();
+        setStatus("Loaded " + FILE_NAME + (added ? ": " + added + " new incident" + (added === 1 ? "" : "s") + "." : "."));
+      }).catch(function () { /* no file next to the page; fine */ });
+    }
+  })();
+</script>
+</body>
+</html>

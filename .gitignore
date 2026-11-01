@@ -1,0 +1,9 @@
+# Exported incident and ping data. It can contain personal monitoring history,
+# so it is kept out of this public repository by default.
+incidents.json
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
