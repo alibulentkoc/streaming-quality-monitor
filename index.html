@@ -843,5 +843,16 @@
     }
   })();
 </script>
+<script>
+  // Offline support: register the service worker. Skipped for file:// pages,
+  // where browsers do not allow service workers.
+  if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol)) {
+    window.addEventListener("load", function () {
+      navigator.serviceWorker.register("./sw.js", { scope: "./" }).catch(function () {
+        /* registration failed; the app works normally without it */
+      });
+    });
+  }
+</script>
 </body>
 </html>

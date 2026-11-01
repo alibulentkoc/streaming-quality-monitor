@@ -26,6 +26,19 @@ Pick one:
    choose "Deploy from a branch", select `main` and `/ (root)`, and save.
    The site appears at https://alibulentkoc.github.io/streaming-quality-monitor/.
 
+## Install and offline use
+
+The app is a Progressive Web App (PWA).
+
+- `manifest.webmanifest` gives the app name, colors, and start page.
+- `sw.js` is a service worker. It keeps a copy of the app so it opens without a connection.
+  It always tries the network first, so a new version shows on the next load.
+- The ping test and `incidents.json` always go to the network and are never cached.
+  Offline, ping results show as failed, which is the correct reading.
+- The service worker runs only over http(s), such as GitHub Pages or a local server.
+  It does not run when `index.html` is opened as a file.
+- Chrome offers "Install" only after the icon files are added (192x192 and 512x512 PNG).
+
 ## How data is stored
 
 All records live in the browser's localStorage under the key `sqm-incidents`.
