@@ -5,7 +5,7 @@ It is one self-contained HTML file. It has no build step, no dependencies, and n
 
 ## Features
 
-- Log an incident with one click. The Digital Match and Remote Desktop buttons log a typed incident.
+- Log an incident with one click. The Live Streaming and Remote Desktop buttons log a typed incident.
   Add incident logs one without a type.
 - Each incident stores its timestamp and a snapshot of the most recent ping result.
 - Ping test every 30 seconds, shown as a log and as a latency chart (ms over time).
