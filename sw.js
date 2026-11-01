@@ -7,8 +7,14 @@
 // - incidents.json (auto-loaded data file),
 // - anything on another origin.
 
-const CACHE = "sqm-v1";
-const PRECACHE = ["./", "./index.html", "./manifest.webmanifest"];
+const CACHE = "sqm-v2";
+const PRECACHE = [
+  "./",
+  "./index.html",
+  "./manifest.webmanifest",
+  "./icons/icon-192.png",
+  "./icons/icon-512.png"
+];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(

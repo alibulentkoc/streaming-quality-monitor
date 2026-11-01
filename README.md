@@ -37,7 +37,7 @@ The app is a Progressive Web App (PWA).
   Offline, ping results show as failed, which is the correct reading.
 - The service worker runs only over http(s), such as GitHub Pages or a local server.
   It does not run when `index.html` is opened as a file.
-- Chrome offers "Install" only after the icon files are added (192x192 and 512x512 PNG).
+- Icons are in `icons/` (192x192 and 512x512 PNG). Chrome offers "Install" over https or localhost.
 
 ## How data is stored
 
